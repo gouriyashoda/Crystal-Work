@@ -196,3 +196,191 @@ Let me know if you need further modifications or have more questions!
 
 
 
+
+
+
+
+
+
+ExcelService.java (updated)
+package com.example.crystalcpr.service;
+
+import com.example.crystalcpr.dao.ExcelDao;
+import com.example.crystalcpr.model.ExcelModel;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+@Service
+public class ExcelService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ExcelService.class);
+    private final ExcelDao excelDao;
+
+    public ExcelService(ExcelDao excelDao) {
+        this.excelDao = excelDao;
+    }
+
+    /**
+     * Method to process the Excel file, read data, validate and persist it into the database.
+     * @param filePath path to the Excel file.
+     */
+    @Transactional
+    public void processExcelFile(String filePath) {
+        logger.info("Processing Excel file from path: {}", filePath);
+
+        File excelFile = new File(filePath);
+        if (!excelFile.exists() || excelFile.isDirectory()) {
+            logger.error("Excel file not found at path: {}", filePath);
+            throw new IllegalArgumentException("Excel file not found or invalid file path.");
+        }
+
+        try (FileInputStream fis = new FileInputStream(excelFile);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+
+            Sheet sheet = workbook.getSheetAt(0); // Assuming the first sheet contains the data.
+            Iterator<Row> rowIterator = sheet.iterator();
+            List<ExcelModel> data = new ArrayList<>();
+
+            // Skip the header row
+            if (rowIterator.hasNext()) {
+                rowIterator.next();
+            }
+
+            while (rowIterator.hasNext()) {
+                Row row = rowIterator.next();
+                ExcelModel model = new ExcelModel();
+
+                // Read and validate each column
+                String column1 = getCellValueAsString(row, 0);
+                String column2 = getCellValueAsString(row, 1);
+                String column3 = getCellValueAsString(row, 2);
+
+                // Check for missing required fields (can be modified based on business logic)
+                if (column1 == null || column2 == null || column3 == null) {
+                    logger.warn("Skipping row with missing data: {}", row);
+                    continue; // Skip rows with missing critical data
+                }
+
+                model.setColumn1(column1);
+                model.setColumn2(column2);
+                model.setColumn3(column3);
+                data.add(model);
+            }
+
+            if (!data.isEmpty()) {
+                excelDao.saveData(data);
+                logger.info("Successfully processed and saved {} records.", data.size());
+            } else {
+                logger.warn("No valid data found in the Excel file.");
+            }
+
+        } catch (IOException e) {
+            logger.error("Error reading Excel file: {}", filePath, e);
+            throw new RuntimeException("Error reading Excel file", e);
+        } catch (Exception e) {
+            logger.error("Unexpected error occurred while processing the Excel file.", e);
+            throw new RuntimeException("Unexpected error", e);
+        }
+    }
+
+    /**
+     * Utility method to safely extract cell value as String.
+     * @param row The current row.
+     * @param cellIndex The index of the column in the row.
+     * @return The value of the cell as a String or null if not a valid String.
+     */
+    private String getCellValueAsString(Row row, int cellIndex) {
+        Cell cell = row.getCell(cellIndex);
+        if (cell == null) {
+            return null; // Return null if the cell is empty
+        }
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                return String.valueOf(cell.getNumericCellValue()).trim();
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue()).trim();
+            default:
+                return null; // Handle other types as invalid data for our case
+        }
+    }
+
+    /**
+     * Validate the structure of the Excel file (headers, columns, etc.).
+     * @param sheet The sheet object to validate.
+     * @return true if the sheet structure is valid, false otherwise.
+     */
+    public boolean validateExcelFileStructure(Sheet sheet) {
+        // Check if the first row contains expected headers (Column1, Column2, Column3)
+        Row headerRow = sheet.getRow(0);
+        if (headerRow == null) {
+            logger.error("Missing header row in Excel file.");
+            return false;
+        }
+
+        // Validate headers (you can extend this as per your required columns)
+        if (!"Column1".equals(headerRow.getCell(0).getStringCellValue()) ||
+            !"Column2".equals(headerRow.getCell(1).getStringCellValue()) ||
+            !"Column3".equals(headerRow.getCell(2).getStringCellValue())) {
+            logger.error("Invalid header row in Excel file.");
+            return false;
+        }
+
+        logger.info("Excel file structure validated successfully.");
+        return true;
+    }
+
+    /**
+     * Method to read and validate the entire Excel file before processing it.
+     * @param filePath Path to the Excel file.
+     */
+    public void readAndValidateExcelFile(String filePath) {
+        File excelFile = new File(filePath);
+        if (!excelFile.exists()) {
+            logger.error("File does not exist at path: {}", filePath);
+            throw new IllegalArgumentException("File not found at the specified path.");
+        }
+
+        try (FileInputStream fis = new FileInputStream(excelFile);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+
+            Sheet sheet = workbook.getSheetAt(0); // Assuming data is on the first sheet
+            if (!validateExcelFileStructure(sheet)) {
+                logger.error("Excel file structure validation failed.");
+                throw new IllegalArgumentException("Invalid Excel file structure.");
+            }
+
+            logger.info("Excel file validated successfully.");
+            processExcelFile(filePath); // Proceed with data extraction if validation is successful
+
+        } catch (IOException e) {
+            logger.error("Error while reading the Excel file.", e);
+            throw new RuntimeException("Error processing the Excel file.", e);
+        }
+    }
+
+    /**
+     * Helper method to log errors for invalid rows while processing the Excel data.
+     * @param row The row that failed.
+     * @param errorMessage The error message.
+     */
+    private void logInvalidRow(Row row, String errorMessage) {
+        logger.error("Invalid row at index {}: {}. Error: {}", row.getRowNum(), row, errorMessage);
+    }
+}
+
+
+
+
