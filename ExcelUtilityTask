@@ -1,250 +1,198 @@
-1. Database Table Structure
-SQL Query
-sql
-Copy code
-CREATE TABLE crystal_cpr_data (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    role VARCHAR(100),
-    email VARCHAR(100),
-    department VARCHAR(100)
-);
-This creates a table to store the data from the Excel file.
-
-2. Maven Dependencies
-Add these dependencies to your pom.xml:
-
-xml
-Copy code
-<dependencies>
-    <!-- Apache POI for Excel -->
-    <dependency>
-        <groupId>org.apache.poi</groupId>
-        <artifactId>poi</artifactId>
-        <version>5.2.3</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.poi</groupId>
-        <artifactId>poi-ooxml</artifactId>
-        <version>5.2.3</version>
-    </dependency>
-    <!-- Spring Data JPA -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-    <!-- PostgreSQL Driver -->
-    <dependency>
-        <groupId>org.postgresql</groupId>
-        <artifactId>postgresql</artifactId>
-    </dependency>
-</dependencies>
-3. Application Configuration
-Update the application.yml file with your database details.
-
-yaml
-Copy code
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/dev_db
-    username: your_username
-    password: your_password
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-4. Model Class
-CrystalCprData.java
-
-java
-Copy code
-package com.example.crystalcpr.model;
-
-import jakarta.persistence.*;
-
-@Entity
-@Table(name = "crystal_cpr_data")
-public class CrystalCprData {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private String name;
-    private String role;
-    private String email;
-    private String department;
-
-    // Getters and Setters
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getDepartment() {
-        return department;
-    }
-
-    public void setDepartment(String department) {
-        this.department = department;
-    }
-}
-5. Repository
-CrystalCprRepository.java
-
-java
-Copy code
-package com.example.crystalcpr.repository;
-
-import com.example.crystalcpr.model.CrystalCprData;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-@Repository
-public interface CrystalCprRepository extends JpaRepository<CrystalCprData, Long> {
-}
-6. DAO Class
-ExcelDao.java
+1. ExcelDao.java
+This is the interface for the DAO layer.
 
 java
 Copy code
 package com.example.crystalcpr.dao;
 
-import com.example.crystalcpr.model.CrystalCprData;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.stereotype.Component;
-
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.ArrayList;
+import com.example.crystalcpr.model.ExcelModel;
 import java.util.List;
 
-@Component
-public class ExcelDao {
+public interface ExcelDao {
+    void saveData(List<ExcelModel> data);
+}
+2. ExcelDaoImpl.java
+This is the implementation of the DAO interface.
 
-    public List<CrystalCprData> readExcelFile(String filePath) throws IOException {
-        List<CrystalCprData> dataList = new ArrayList<>();
-        FileInputStream fis = new FileInputStream(filePath);
-        XSSFWorkbook workbook = new XSSFWorkbook(fis);
-        Sheet sheet = workbook.getSheetAt(0);
+java
+Copy code
+package com.example.crystalcpr.dao;
 
-        for (Row row : sheet) {
-            if (row.getRowNum() == 0) continue; // Skip header row
-            CrystalCprData data = new CrystalCprData();
-            data.setName(row.getCell(1).getStringCellValue());
-            data.setRole(row.getCell(2).getStringCellValue());
-            data.setEmail(row.getCell(3).getStringCellValue());
-            data.setDepartment(row.getCell(4).getStringCellValue());
-            dataList.add(data);
+import com.example.crystalcpr.model.ExcelModel;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public class ExcelDaoImpl implements ExcelDao {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public ExcelDaoImpl(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Override
+    public void saveData(List<ExcelModel> data) {
+        String sql = "INSERT INTO excel_data (column1, column2, column3) VALUES (?, ?, ?)";
+        for (ExcelModel model : data) {
+            jdbcTemplate.update(sql, model.getColumn1(), model.getColumn2(), model.getColumn3());
         }
-        workbook.close();
-        return dataList;
     }
 }
-7. Service Class
-CrystalCprService.java
+3. ExcelModel.java
+This is the model class representing the database entity.
+
+java
+Copy code
+package com.example.crystalcpr.model;
+
+public class ExcelModel {
+    private String column1;
+    private String column2;
+    private String column3;
+
+    // Getters and Setters
+    public String getColumn1() {
+        return column1;
+    }
+
+    public void setColumn1(String column1) {
+        this.column1 = column1;
+    }
+
+    public String getColumn2() {
+        return column2;
+    }
+
+    public void setColumn2(String column2) {
+        this.column2 = column2;
+    }
+
+    public String getColumn3() {
+        return column3;
+    }
+
+    public void setColumn3(String column3) {
+        this.column3 = column3;
+    }
+}
+4. ExcelService.java
+This is the service layer where the business logic resides.
 
 java
 Copy code
 package com.example.crystalcpr.service;
 
 import com.example.crystalcpr.dao.ExcelDao;
-import com.example.crystalcpr.model.CrystalCprData;
-import com.example.crystalcpr.repository.CrystalCprRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.example.crystalcpr.model.ExcelModel;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class CrystalCprService {
+public class ExcelService {
 
-    @Autowired
-    private ExcelDao excelDao;
+    private final ExcelDao excelDao;
 
-    @Autowired
-    private CrystalCprRepository crystalCprRepository;
+    public ExcelService(ExcelDao excelDao) {
+        this.excelDao = excelDao;
+    }
 
     public void processExcelFile(String filePath) {
-        try {
-            List<CrystalCprData> dataList = excelDao.readExcelFile(filePath);
-            crystalCprRepository.saveAll(dataList);
+        try (FileInputStream fis = new FileInputStream(filePath);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+
+            Sheet sheet = workbook.getSheetAt(0); // Assume first sheet
+            List<ExcelModel> data = new ArrayList<>();
+
+            for (Row row : sheet) {
+                if (row.getRowNum() == 0) continue; // Skip header row
+
+                ExcelModel model = new ExcelModel();
+                model.setColumn1(row.getCell(0).getStringCellValue());
+                model.setColumn2(row.getCell(1).getStringCellValue());
+                model.setColumn3(row.getCell(2).getStringCellValue());
+                data.add(model);
+            }
+
+            excelDao.saveData(data);
+
         } catch (IOException e) {
-            throw new RuntimeException("Error processing Excel file", e);
+            e.printStackTrace();
         }
     }
 }
-8. Controller or Job
-CrystalCprController.java
+5. ExcelJob.java
+This class triggers the processing of the Excel file.
 
 java
 Copy code
-package com.example.crystalcpr.controller;
+package com.example.crystalcpr.job;
 
-import com.example.crystalcpr.service.CrystalCprService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import com.example.crystalcpr.service.ExcelService;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
-@RestController
-@RequestMapping("/api/cpr")
-public class CrystalCprController {
+@Component
+public class ExcelJob {
 
-    @Autowired
-    private CrystalCprService crystalCprService;
+    private final ExcelService excelService;
 
-    @PostMapping("/upload")
-    public String uploadExcelFile(@RequestParam("filePath") String filePath) {
-        crystalCprService.processExcelFile(filePath);
-        return "Data successfully persisted into the database.";
+    public ExcelJob(ExcelService excelService) {
+        this.excelService = excelService;
+    }
+
+    @Scheduled(cron = "0 0 * * * ?") // Runs every hour
+    public void runExcelProcessingJob() {
+        String filePath = "/path/to/your/crystal_cpr_file.xlsx"; // Update with the actual file path
+        excelService.processExcelFile(filePath);
     }
 }
-9. Running the Application
-Start your application.
-Use an API testing tool (e.g., Postman) to send a POST request:
-bash
+6. application.yml
+Configuration for the database connection and scheduling.
+
+yaml
 Copy code
-POST http://localhost:8080/api/cpr/upload
-Body: filePath=/path/to/Crystal-Extract.xlsx
-Verify the data in the crystal_cpr_data table in the development database.
-This solution provides a complete flow from reading the Excel file to persisting the data into the database using Spring Boot. Let me know if you need further clarification or enhancements!
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/crystaldb
+    username: yourusername
+    password: yourpassword
+    driver-class-name: org.postgresql.Driver
 
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
 
+logging:
+  level:
+    root: INFO
+    org.springframework.jdbc.core.JdbcTemplate: DEBUG
+Database Table: excel_data
+Make sure to create the database table excel_data in your PostgreSQL database with the following schema:
 
-
-
-
-
-
+sql
+Copy code
+CREATE TABLE excel_data (
+    column1 VARCHAR(255),
+    column2 VARCHAR(255),
+    column3 VARCHAR(255)
+);
+Steps to Complete Your Task
+Update the file path in the ExcelJob.java class to point to the correct location of your crystal_cpr_file.xlsx.
+Create the excel_data table in your PostgreSQL database using the SQL provided above.
+Run the application and the scheduled job will periodically read the data from the Excel file and persist it into the excel_data table.
+Let me know if you need further modifications or have more questions!
 
 
 
