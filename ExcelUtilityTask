@@ -1,0 +1,250 @@
+1. Database Table Structure
+SQL Query
+sql
+Copy code
+CREATE TABLE crystal_cpr_data (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    role VARCHAR(100),
+    email VARCHAR(100),
+    department VARCHAR(100)
+);
+This creates a table to store the data from the Excel file.
+
+2. Maven Dependencies
+Add these dependencies to your pom.xml:
+
+xml
+Copy code
+<dependencies>
+    <!-- Apache POI for Excel -->
+    <dependency>
+        <groupId>org.apache.poi</groupId>
+        <artifactId>poi</artifactId>
+        <version>5.2.3</version>
+    </dependency>
+    <dependency>
+        <groupId>org.apache.poi</groupId>
+        <artifactId>poi-ooxml</artifactId>
+        <version>5.2.3</version>
+    </dependency>
+    <!-- Spring Data JPA -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <!-- PostgreSQL Driver -->
+    <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>postgresql</artifactId>
+    </dependency>
+</dependencies>
+3. Application Configuration
+Update the application.yml file with your database details.
+
+yaml
+Copy code
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/dev_db
+    username: your_username
+    password: your_password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+4. Model Class
+CrystalCprData.java
+
+java
+Copy code
+package com.example.crystalcpr.model;
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "crystal_cpr_data")
+public class CrystalCprData {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+    private String role;
+    private String email;
+    private String department;
+
+    // Getters and Setters
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+}
+5. Repository
+CrystalCprRepository.java
+
+java
+Copy code
+package com.example.crystalcpr.repository;
+
+import com.example.crystalcpr.model.CrystalCprData;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface CrystalCprRepository extends JpaRepository<CrystalCprData, Long> {
+}
+6. DAO Class
+ExcelDao.java
+
+java
+Copy code
+package com.example.crystalcpr.dao;
+
+import com.example.crystalcpr.model.CrystalCprData;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.stereotype.Component;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+@Component
+public class ExcelDao {
+
+    public List<CrystalCprData> readExcelFile(String filePath) throws IOException {
+        List<CrystalCprData> dataList = new ArrayList<>();
+        FileInputStream fis = new FileInputStream(filePath);
+        XSSFWorkbook workbook = new XSSFWorkbook(fis);
+        Sheet sheet = workbook.getSheetAt(0);
+
+        for (Row row : sheet) {
+            if (row.getRowNum() == 0) continue; // Skip header row
+            CrystalCprData data = new CrystalCprData();
+            data.setName(row.getCell(1).getStringCellValue());
+            data.setRole(row.getCell(2).getStringCellValue());
+            data.setEmail(row.getCell(3).getStringCellValue());
+            data.setDepartment(row.getCell(4).getStringCellValue());
+            dataList.add(data);
+        }
+        workbook.close();
+        return dataList;
+    }
+}
+7. Service Class
+CrystalCprService.java
+
+java
+Copy code
+package com.example.crystalcpr.service;
+
+import com.example.crystalcpr.dao.ExcelDao;
+import com.example.crystalcpr.model.CrystalCprData;
+import com.example.crystalcpr.repository.CrystalCprRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.util.List;
+
+@Service
+public class CrystalCprService {
+
+    @Autowired
+    private ExcelDao excelDao;
+
+    @Autowired
+    private CrystalCprRepository crystalCprRepository;
+
+    public void processExcelFile(String filePath) {
+        try {
+            List<CrystalCprData> dataList = excelDao.readExcelFile(filePath);
+            crystalCprRepository.saveAll(dataList);
+        } catch (IOException e) {
+            throw new RuntimeException("Error processing Excel file", e);
+        }
+    }
+}
+8. Controller or Job
+CrystalCprController.java
+
+java
+Copy code
+package com.example.crystalcpr.controller;
+
+import com.example.crystalcpr.service.CrystalCprService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/cpr")
+public class CrystalCprController {
+
+    @Autowired
+    private CrystalCprService crystalCprService;
+
+    @PostMapping("/upload")
+    public String uploadExcelFile(@RequestParam("filePath") String filePath) {
+        crystalCprService.processExcelFile(filePath);
+        return "Data successfully persisted into the database.";
+    }
+}
+9. Running the Application
+Start your application.
+Use an API testing tool (e.g., Postman) to send a POST request:
+bash
+Copy code
+POST http://localhost:8080/api/cpr/upload
+Body: filePath=/path/to/Crystal-Extract.xlsx
+Verify the data in the crystal_cpr_data table in the development database.
+This solution provides a complete flow from reading the Excel file to persisting the data into the database using Spring Boot. Let me know if you need further clarification or enhancements!
+
+
+
+
+
+
+
+
+
+
+
